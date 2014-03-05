@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 #include <iostream>
 #include <string>
@@ -13,8 +14,10 @@ using namespace std;
 #define DEFAULT_IP "127.0.0.1"
 #define DEFAULT_PORT 25064
 
+#define PACKET_SIZE     64
 #define PACKET_SIZE_MAX 1024
-#define PACKET_RECV_MAX 1
+#define PACKET_RECV_MAX 10
+#define PACKET_INTERVAL 1000000 // 1 second
 
 void usage(char* name) {
   printf("Sender Usage: %s -s [-ip IP] [-p Port]\n", name);
@@ -63,15 +66,21 @@ void initsender(string ip, int port) {
 
   // Send example message
   memset(&buffer, 0, PACKET_SIZE_MAX);
-  strcpy(buffer, "Hello, computer");
-  int msglen = strlen(buffer);
-  int count = sendto(sfd, buffer, msglen, 0, 
-                     (struct sockaddr *) &other_addr, addr_size);
-  if (count == -1) {
-    fprintf(stderr, "ERROR: Failed to send message\n");
-    exit(1);
+  //strcpy(buffer, "Data goes here");
+  //int msglen = strlen(buffer);
+  int msglen = PACKET_SIZE;
+  for (int i = 0; i < PACKET_RECV_MAX; i++) {
+    int count = sendto(sfd, buffer, msglen, 0, 
+                       (struct sockaddr *) &other_addr, addr_size);
+    if (count == -1) {
+      fprintf(stderr, "ERROR: Failed to send message\n");
+      exit(1);
+    }
+    printf("Sent message of length %d to %s:%d\n", msglen, ip.c_str(), port);
+    
+    // Sleep
+    usleep(PACKET_INTERVAL);
   }
-  printf("Sent message to receiver at IP %s on port %d\n", ip.c_str(), port);
 
   printf("\nDone.\n");
 }
@@ -81,6 +90,7 @@ void initsender(string ip, int port) {
 void initreceiver(int port) {
   struct sockaddr_in own_addr, other_addr;
   socklen_t addr_size = sizeof(own_addr);
+  char other_ip[INET_ADDRSTRLEN];
   int sfd;
 
   char buffer[PACKET_SIZE_MAX];
@@ -102,15 +112,19 @@ void initreceiver(int port) {
 
   // listen for incoming packets
   printf("Listening on port %d for incoming packets...\n", port);
-  memset(&buffer, 0, PACKET_SIZE_MAX);
-  int count = recvfrom(sfd, buffer, PACKET_SIZE_MAX, 0,
-                       (struct sockaddr *) &other_addr, &addr_size);
-  if (count == -1) {
-    fprintf(stderr, "ERROR: Failed to receive packet from sender\n");
-    exit(1);
-  } 
+  for (int i = 0; i < PACKET_RECV_MAX; i++) {
+    memset(&buffer, 0, PACKET_SIZE_MAX);
+    int count = recvfrom(sfd, buffer, PACKET_SIZE_MAX, 0,
+                         (struct sockaddr *) &other_addr, &addr_size);
+    if (count == -1) {
+      fprintf(stderr, "ERROR: Failed to receive packet from sender\n");
+      exit(1);
+    }
 
-  printf("Got message from sender: %s\n", buffer);
+    inet_ntop(AF_INET, &(other_addr.sin_addr), other_ip, INET_ADDRSTRLEN); 
+
+    printf("Received %d bytes from %s:%d\n", count, other_ip, ntohs(other_addr.sin_port));
+  }
 
   printf("\nDone.\n");
 }
