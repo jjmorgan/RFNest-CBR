@@ -19,7 +19,7 @@ using namespace std;
 #define DEFAULT_PORT 25064
 
 #define PACKET_SIZE 2048
-#define PACKET_INTERVAL 10
+#define PACKET_INTERVAL 10 // microseconds
 
 void usage(char* name) {
   printf("Sender Usage: %s -s [-ip IP] [-p Port] [-f Filename]\n", name);
@@ -167,6 +167,12 @@ void initreceiver(int port) {
   printf("Receiving file transfer from %s:%d: %s (%d bytes)\n",
         other_ip, ntohs(other_addr.sin_port), filename.c_str(), filesize);
 
+  // create download dir if not found
+  struct stat dwn_folder;
+  if (stat("download", &dwn_folder) == -1) {
+    mkdir("download", 0700);
+  }
+
   // download file from sender
   stringstream filename_dest;
   filename_dest << "download/" << filename;
@@ -229,6 +235,10 @@ int main(int argc, char **argv) {
     usage(argv[0]);
 
   if (sender) {
+    if (filename == "") {
+      printf("Sender must be supplied with a filename: [-f filename]\n");
+      return 0;
+    }
     initsender(ip, port, filename);
   }
   else if (receiver) {
